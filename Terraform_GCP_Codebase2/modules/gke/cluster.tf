@@ -1,6 +1,7 @@
-data "google_container_engine_versions" "central1" {
-  location = var.region
-  project  = var.project_id
+data "google_container_engine_versions" "versions" {
+  location       = var.region
+  project        = var.project_id
+  version_prefix = "1.28."
 }
 
 resource "google_container_cluster" "primary" {
@@ -14,24 +15,28 @@ resource "google_container_cluster" "primary" {
   remove_default_node_pool = true
   initial_node_count       = 1
   
-  min_master_version = data.google_container_engine_versions.central1.latest_master_version
+  min_master_version = data.google_container_engine_versions.versions.release_channel_latest_version["REGULAR"]
+  
+  release_channel {
+    channel = "REGULAR"
+  }
   
   ip_allocation_policy {
-    cluster_secondary_range_name  = "pods"
-    services_secondary_range_name = "services"
+    cluster_secondary_range_name  = var.pods_range_name
+    services_secondary_range_name = var.services_range_name
   }
   
   master_authorized_networks_config {
     cidr_blocks {
       cidr_block   = "0.0.0.0/0"
-      display_name = "All networks"
+      display_name = "All"
     }
   }
   
   private_cluster_config {
     enable_private_nodes    = true
     enable_private_endpoint = false
-    master_ipv4_cidr_block  = var.master_ipv4_cidr
+    master_ipv4_cidr_block  = "172.16.0.0/28"
   }
   
   addons_config {
@@ -46,6 +51,14 @@ resource "google_container_cluster" "primary" {
     network_policy_config {
       disabled = true
     }
+    
+    gcp_filestore_csi_driver_config {
+      enabled = false
+    }
+    
+    gcs_fuse_csi_driver_config {
+      enabled = false
+    }
   }
   
   workload_identity_config {
@@ -58,5 +71,13 @@ resource "google_container_cluster" "primary" {
     daily_maintenance_window {
       start_time = "03:00"
     }
+  }
+  
+  logging_config {
+    enable_components = ["SYSTEM_COMPONENTS"]
+  }
+  
+  monitoring_config {
+    enable_components = ["SYSTEM_COMPONENTS"]
   }
 }
